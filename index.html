@@ -23,6 +23,9 @@ const CONFIG = {
   // Shown in the top bar and the browser tab.
   TITLE: 'CHOW AIchive',
 
+  // Newest submission first. Set to false to read oldest to newest.
+  NEWEST_FIRST: true,
+
   // Which sheet column feeds which field. Matching is loose and
   // case-insensitive, so "Project title" matches 'title'. First match wins.
   // Only title and image are needed — everything else is drawn when present
@@ -509,7 +512,10 @@ select.field{
           .filter(Boolean)
       });
     });
-    return out;
+
+    // The form appends each submission to the bottom of the sheet,
+    // so reversing puts the newest work at the top of the wall.
+    return CONFIG.NEWEST_FIRST ? out.reverse() : out;
   }
 
   function val(row, key) { return key ? String(row[key] || '').trim() : ''; }
