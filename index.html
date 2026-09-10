@@ -25,12 +25,15 @@ const CONFIG = {
 
   // Which sheet column feeds which field. Matching is loose and
   // case-insensitive, so "Project title" matches 'title'. First match wins.
+  // Only title and image are needed — everything else is drawn when present
+  // and skipped when the cell is blank.
   FIELDS: {
     title:   ['project title', 'title', 'project', 'name'],
     client:  ['client', 'brand', 'account'],
     creator: ['creator', 'created by', 'designer', 'author', 'credit'],
     tags:    ['tag', 'keyword', 'category'],
     image:   ['image', 'upload', 'file', 'photo', 'artwork', 'visual'],
+    asana:   ['asana', 'task link', 'task url', 'task'],
     date:    ['timestamp', 'date']
   }
 };
@@ -51,7 +54,6 @@ const CONFIG = {
 }
 
 *{box-sizing:border-box}
-
 html{-webkit-text-size-adjust:100%}
 
 body{
@@ -66,7 +68,6 @@ body{
 }
 
 button,input,select{font:inherit;color:inherit}
-
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
 /* ---- top bar ------------------------------------------------- */
@@ -76,7 +77,7 @@ button,input,select{font:inherit;color:inherit}
   top:0;
   z-index:20;
   background:var(--wall);
-  border-bottom:1px solid var(--rule);
+  border-bottom:1px solid #e5e4e3;
   padding:14px 16px 12px;
   display:flex;
   flex-wrap:wrap;
@@ -155,7 +156,7 @@ select.field{
 }
 @media (max-width:1180px){.wall{column-count:3}}
 @media (max-width:760px){.wall{column-count:2}}
-@media (max-width:430px){.wall{column-count:1}}
+@media (max-width:430px){:root{--gap:6px}}
 
 .tile{
   display:block;
@@ -181,6 +182,21 @@ select.field{
 }
 .tile img.loaded{opacity:1}
 
+.more{
+  position:absolute;
+  top:7px;right:7px;
+  display:flex;
+  align-items:center;
+  gap:4px;
+  background:rgba(29,28,29,.8);
+  color:var(--paper);
+  font-size:11.5px;
+  font-weight:500;
+  font-variant-numeric:tabular-nums;
+  letter-spacing:-.01em;
+  padding:2px 6px;
+}
+
 .tag-line{
   position:absolute;
   left:0;right:0;bottom:0;
@@ -195,6 +211,7 @@ select.field{
 
 .tag-line b{display:block;font-weight:600;font-size:13.5px;line-height:1.25;letter-spacing:-.012em}
 .tag-line span{display:block;font-size:12.5px;color:#c9c8c7;margin-top:1px}
+.tag-line span:empty{display:none}
 
 /* ---- messages ------------------------------------------------ */
 
@@ -244,8 +261,8 @@ select.field{
   color:var(--paper);
   display:flex;
   flex-wrap:wrap;
-  align-items:flex-end;
-  gap:8px 28px;
+  align-items:center;
+  gap:9px 24px;
 }
 .meta h2{
   margin:0;
@@ -255,6 +272,7 @@ select.field{
   letter-spacing:-.018em;
   flex-basis:100%;
 }
+
 .credits{
   display:flex;
   flex-wrap:wrap;
@@ -268,7 +286,7 @@ select.field{
 .tags{display:flex;flex-wrap:wrap;gap:6px}
 .tags button{
   background:none;
-  border:1px solid #555454;
+  border:1px solid var(--muted);
   color:#c9c8c7;
   padding:3px 8px;
   font-size:12.5px;
@@ -277,12 +295,48 @@ select.field{
 }
 .tags button:hover{border-color:var(--accent);color:var(--accent)}
 
+.task{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  border:1px solid var(--accent);
+  color:var(--accent);
+  text-decoration:none;
+  padding:4px 10px;
+  font-size:12.5px;
+  font-weight:500;
+  letter-spacing:-.005em;
+  transition:background-color .15s ease,color .15s ease;
+}
+.task:hover{background:var(--accent);color:var(--paper)}
+
 .pos{
   margin-left:auto;
   font-size:13px;
   color:#8a8988;
   font-variant-numeric:tabular-nums;
 }
+
+.strip{
+  flex-basis:100%;
+  display:flex;
+  flex-wrap:wrap;
+  gap:5px;
+  margin-top:3px;
+}
+.strip button{
+  width:44px;height:44px;
+  padding:0;
+  border:1px solid var(--muted);
+  background:none;
+  cursor:pointer;
+  overflow:hidden;
+  line-height:0;
+}
+.strip img{width:100%;height:100%;object-fit:cover;opacity:.45;transition:opacity .15s ease}
+.strip button:hover img{opacity:1}
+.strip button.on{border-color:var(--accent)}
+.strip button.on img{opacity:1}
 
 .nav{
   position:absolute;
@@ -303,9 +357,10 @@ select.field{
   .stage{padding:44px 8px 8px}
   .prev{left:-2px}
   .next{right:-2px}
-  .meta{padding:12px 14px 18px}
+  .meta{padding:12px 14px 18px;gap:8px 16px}
   .pos{margin-left:0;flex-basis:100%}
-  .search{width:140px}
+  .search{width:calc(100vw - 60px)}
+  .controls{width:100%}
 }
 
 @media (prefers-reduced-motion:reduce){
@@ -352,7 +407,12 @@ select.field{
     <h2 id="lbTitle"></h2>
     <div class="credits" id="lbCredits"></div>
     <div class="tags" id="lbTags"></div>
+    <a class="task" id="lbTask" target="_blank" rel="noopener" hidden>
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M4.5 1.5h6v6M10.5 1.5L5 7M9 7.5v3h-8v-8h3" stroke="currentColor" stroke-width="1.4"/></svg>
+      Open in Asana
+    </a>
     <div class="pos" id="lbPos"></div>
+    <div class="strip" id="lbStrip" hidden></div>
   </div>
 </div>
 
@@ -360,8 +420,9 @@ select.field{
 (function () {
   'use strict';
 
-  var ALL = [];
-  var VIEW = [];
+  var ITEMS = [];   // one entry per submission
+  var VIEW = [];    // submissions passing the filters
+  var FLAT = [];    // every image in VIEW, in order — what the arrows walk
   var index = -1;
   var lastFocus = null;
 
@@ -391,8 +452,8 @@ select.field{
       .then(function (r) { return r.json(); })
       .then(function (data) {
         if (!data.ok) throw new Error(data.error || 'The sheet returned an error.');
-        ALL = build(data.items || []);
-        if (!ALL.length) {
+        ITEMS = build(data.items || []);
+        if (!ITEMS.length) {
           return fail('Nothing in the archive yet',
             'The sheet is reachable but has no rows with images. Submit the form once, then hit Refresh.');
         }
@@ -434,22 +495,18 @@ select.field{
     rows.forEach(function (row) {
       var cell = map.image ? String(row[map.image] || '') : '';
       var urls = cell.split(/[\s,]+/).filter(function (u) { return /^https?:\/\//i.test(u); });
+      if (!urls.length) return;
 
-      urls.forEach(function (u, n) {
-        var s = sources(u);
-        out.push({
-          key: row._row + '-' + n,
-          thumb: s.thumb,
-          full: s.full,
-          alt: s.alt,
-          title: val(row, map.title) || 'Untitled',
-          client: val(row, map.client),
-          creator: val(row, map.creator),
-          date: val(row, map.date),
-          tags: val(row, map.tags).split(/[,;/]+/)
-            .map(function (t) { return t.trim(); })
-            .filter(Boolean)
-        });
+      out.push({
+        images: urls.map(sources),
+        title: val(row, map.title) || 'Untitled',
+        client: val(row, map.client),
+        creator: val(row, map.creator),
+        date: val(row, map.date),
+        asana: link(val(row, map.asana)),
+        tags: val(row, map.tags).split(/[,;/]+/)
+          .map(function (t) { return t.trim(); })
+          .filter(Boolean)
       });
     });
     return out;
@@ -457,33 +514,49 @@ select.field{
 
   function val(row, key) { return key ? String(row[key] || '').trim() : ''; }
 
+  // Tolerates a pasted link with no scheme. Anything that isn't a link is dropped.
+  function link(v) {
+    if (!v) return '';
+    if (/^https?:\/\//i.test(v)) return v;
+    if (/^[\w.-]+\.[a-z]{2,}\//i.test(v)) return 'https://' + v;
+    return '';
+  }
+
   function sources(url) {
     if (/drive\.google\.com|googleusercontent\.com/.test(url)) {
       var m = url.match(/[-\w]{25,}/);
       if (m) return {
+        id: m[0],
         thumb: 'https://lh3.googleusercontent.com/d/' + m[0] + '=w900',
         full: 'https://lh3.googleusercontent.com/d/' + m[0] + '=w2400',
         alt: 'https://drive.google.com/thumbnail?id=' + m[0] + '&sz=w2000'
       };
     }
-    return { thumb: url, full: url, alt: url };
+    return { id: fingerprint(url), thumb: url, full: url, alt: url };
+  }
+
+  // Stable short id for images that aren't hosted on Drive.
+  function fingerprint(s) {
+    var h = 0;
+    for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+    return 'u' + Math.abs(h).toString(36);
   }
 
   /* ---- filters -------------------------------------------------- */
 
   function fillFilters() {
-    add(el('fClient'), uniq('client'));
-    add(el('fCreator'), uniq('creator'));
     var tags = [];
-    ALL.forEach(function (i) {
+    ITEMS.forEach(function (i) {
       i.tags.forEach(function (t) { if (tags.indexOf(t) === -1) tags.push(t); });
     });
-    add(el('fTag'), tags.sort(cmp));
+    setOptions(el('fClient'), uniq('client'));
+    setOptions(el('fCreator'), uniq('creator'));
+    setOptions(el('fTag'), tags.sort(cmp));
   }
 
   function uniq(field) {
     var seen = [];
-    ALL.forEach(function (i) {
+    ITEMS.forEach(function (i) {
       if (i[field] && seen.indexOf(i[field]) === -1) seen.push(i[field]);
     });
     return seen.sort(cmp);
@@ -491,25 +564,37 @@ select.field{
 
   function cmp(a, b) { return a.localeCompare(b); }
 
-  function add(sel, list) {
+  // A filter with nothing to offer stays out of the way.
+  function setOptions(sel, list) {
+    sel.length = 1;
+    sel.value = '';
     list.forEach(function (v) {
       var o = document.createElement('option');
       o.value = v; o.textContent = v;
       sel.appendChild(o);
     });
+    sel.hidden = list.length === 0;
   }
 
   function apply() {
     var q = el('q').value.trim().toLowerCase();
     var c = el('fClient').value, cr = el('fCreator').value, tg = el('fTag').value;
 
-    VIEW = ALL.filter(function (i) {
+    VIEW = ITEMS.filter(function (i) {
       if (c && i.client !== c) return false;
       if (cr && i.creator !== cr) return false;
       if (tg && i.tags.indexOf(tg) === -1) return false;
       if (!q) return true;
       return (i.title + ' ' + i.client + ' ' + i.creator + ' ' + i.tags.join(' '))
         .toLowerCase().indexOf(q) > -1;
+    });
+
+    FLAT = [];
+    VIEW.forEach(function (item) {
+      item.start = FLAT.length;
+      item.images.forEach(function (img, n) {
+        FLAT.push({ item: item, img: img, n: n });
+      });
     });
 
     el('q').classList.toggle('active', !!q);
@@ -520,9 +605,9 @@ select.field{
     var on = !!(q || c || cr || tg);
     el('clear').hidden = !on;
     el('count').classList.toggle('filtered', on);
-    el('count').textContent = VIEW.length === ALL.length
-      ? ALL.length + (ALL.length === 1 ? ' image' : ' images')
-      : VIEW.length + ' of ' + ALL.length;
+    el('count').textContent = on
+      ? VIEW.length + ' of ' + ITEMS.length
+      : ITEMS.length + (ITEMS.length === 1 ? ' project' : ' projects');
 
     render();
   }
@@ -537,31 +622,44 @@ select.field{
     show(wall);
 
     var frag = document.createDocumentFragment();
-    VIEW.forEach(function (item, i) {
+    VIEW.forEach(function (item) {
+      var cover = item.images[0];
+
       var b = document.createElement('button');
       b.className = 'tile';
       b.type = 'button';
       b.setAttribute('aria-label', 'Open ' + item.title);
 
       var img = document.createElement('img');
-      img.src = item.thumb;
+      img.src = cover.thumb;
       img.alt = item.title;
       img.loading = 'lazy';
       img.decoding = 'async';
       img.addEventListener('load', function () { img.classList.add('loaded'); });
       img.addEventListener('error', function () {
-        if (img.src !== item.alt) { img.src = item.alt; } else { b.remove(); }
+        if (img.src !== cover.alt) { img.src = cover.alt; } else { b.remove(); }
       });
+      b.appendChild(img);
+
+      if (item.images.length > 1) {
+        var badge = document.createElement('span');
+        badge.className = 'more';
+        badge.innerHTML = '<svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">'
+          + '<rect x="3.2" y=".7" width="6.1" height="6.1" stroke="currentColor" stroke-width="1.2"/>'
+          + '<path d="M6.8 9.3H.7V3.2" stroke="currentColor" stroke-width="1.2"/></svg>';
+        badge.appendChild(document.createTextNode(String(item.images.length)));
+        b.appendChild(badge);
+      }
 
       var cap = document.createElement('div');
       cap.className = 'tag-line';
       cap.innerHTML = '<b></b><span></span>';
       cap.querySelector('b').textContent = item.title;
-      cap.querySelector('span').textContent = [item.client, item.creator].filter(Boolean).join(' — ');
-
-      b.appendChild(img);
+      cap.querySelector('span').textContent =
+        [item.client, item.creator].filter(Boolean).join(' — ');
       b.appendChild(cap);
-      b.addEventListener('click', function () { open(i); });
+
+      b.addEventListener('click', function () { open(item.start); });
       frag.appendChild(b);
     });
     wall.appendChild(frag);
@@ -570,18 +668,21 @@ select.field{
   /* ---- lightbox -------------------------------------------------- */
 
   function open(i) {
-    if (i < 0 || i >= VIEW.length) return;
+    if (i < 0 || i >= FLAT.length) return;
     if (!lb.classList.contains('open')) lastFocus = document.activeElement;
     index = i;
-    var item = VIEW[i];
+
+    var entry = FLAT[i];
+    var item = entry.item;
 
     var img = el('lbImg');
-    img.onerror = function () { if (img.src !== item.alt) img.src = item.alt; };
-    img.src = item.full;
+    img.onerror = function () { if (img.src !== entry.img.alt) img.src = entry.img.alt; };
+    img.src = entry.img.full;
     img.alt = item.title;
 
     el('lbTitle').textContent = item.title;
 
+    // Everything below the title is optional — it only appears if it's filled in.
     var credits = [];
     if (item.client) credits.push(['Client', item.client]);
     if (item.creator) credits.push(['Creator', item.creator]);
@@ -593,24 +694,47 @@ select.field{
     var tags = el('lbTags');
     tags.innerHTML = '';
     item.tags.forEach(function (t) {
-      var b = document.createElement('button');
-      b.type = 'button';
-      b.textContent = t;
-      b.addEventListener('click', function () {
+      var tb = document.createElement('button');
+      tb.type = 'button';
+      tb.textContent = t;
+      tb.addEventListener('click', function () {
         close();
         el('fTag').value = t;
         apply();
       });
-      tags.appendChild(b);
+      tags.appendChild(tb);
     });
 
-    el('lbPos').textContent = (i + 1) + ' of ' + VIEW.length;
+    var task = el('lbTask');
+    task.hidden = !item.asana;
+    if (item.asana) task.href = item.asana;
+
+    var strip = el('lbStrip');
+    strip.innerHTML = '';
+    strip.hidden = item.images.length < 2;
+    if (!strip.hidden) {
+      item.images.forEach(function (im, n) {
+        var sb = document.createElement('button');
+        sb.type = 'button';
+        sb.className = n === entry.n ? 'on' : '';
+        sb.setAttribute('aria-label', 'Image ' + (n + 1) + ' of ' + item.images.length);
+        var si = document.createElement('img');
+        si.src = im.thumb;
+        si.alt = '';
+        si.loading = 'lazy';
+        sb.appendChild(si);
+        sb.addEventListener('click', function () { open(item.start + n); });
+        strip.appendChild(sb);
+      });
+    }
+
+    el('lbPos').textContent = (i + 1) + ' of ' + FLAT.length;
     el('prev').style.visibility = i > 0 ? '' : 'hidden';
-    el('next').style.visibility = i < VIEW.length - 1 ? '' : 'hidden';
+    el('next').style.visibility = i < FLAT.length - 1 ? '' : 'hidden';
 
     lb.classList.add('open');
     document.body.style.overflow = 'hidden';
-    history.replaceState(null, '', '#' + item.key);
+    history.replaceState(null, '', '#' + entry.img.id);
     el('shut').focus();
   }
 
@@ -622,11 +746,12 @@ select.field{
     if (lastFocus) lastFocus.focus();
   }
 
+  // Links key off the Drive file id, so they survive rows being deleted or reordered.
   function openFromHash() {
-    var key = location.hash.replace('#', '');
-    if (!key) return;
-    for (var i = 0; i < VIEW.length; i++) {
-      if (VIEW[i].key === key) return open(i);
+    var id = location.hash.replace('#', '');
+    if (!id) return;
+    for (var i = 0; i < FLAT.length; i++) {
+      if (FLAT[i].img.id === id) return open(i);
     }
   }
 
@@ -651,12 +776,7 @@ select.field{
     apply();
   });
 
-  el('refresh').addEventListener('click', function () {
-    ['fClient', 'fCreator', 'fTag'].forEach(function (id) {
-      el(id).length = 1; el(id).value = '';
-    });
-    load();
-  });
+  el('refresh').addEventListener('click', load);
 
   el('shut').addEventListener('click', close);
   el('prev').addEventListener('click', function () { open(index - 1); });
